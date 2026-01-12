@@ -1,0 +1,8 @@
+{
+  "name": "Copy of EduNexus - Smart Learning Platform",
+  "description": "A comprehensive educational platform for students, teachers, and parents featuring lesson planning, automated testing, drawing assignments, and progress tracking.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
