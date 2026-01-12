@@ -24,8 +24,8 @@ export interface User {
   name: string;
   role: UserRole | null;
   avatar: string;
-  contactInfo: string; // Email or Phone (used as Login)
-  password: string;    // Password for login
+  contactInfo: string; // Email, Phone or Username
+  password?: string;
   isApproved: boolean;
   isAdmin: boolean;
   age?: number;
@@ -41,12 +41,14 @@ export interface Group {
   studentIds: string[];
   performanceLevel: 'Высокая' | 'Средняя' | 'Требует внимания';
   averageScore: number;
+  subgroups?: string[]; // IDs of subgroups
 }
 
 export interface LessonPlan {
   id: string;
   subjectId: string;
   groupId: string;
+  teacherId: string;
   title: string;
   date: string;
   description: string;
@@ -55,6 +57,22 @@ export interface LessonPlan {
   videoUrl?: string;
   meetingLink?: string;
   attendance: string[]; 
+}
+
+export interface SubjectTeacherLink {
+  id: string;
+  subjectId: string;
+  teacherId: string;
+  groupId: string;
+}
+
+export interface SystemLog {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  action: string;
+  details: string;
 }
 
 export interface Quiz {

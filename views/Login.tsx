@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { MOCK_USERS } from '../data';
 
@@ -12,64 +12,50 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [contactInfo, setContactInfo] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
 
   const getUsersFromStorage = (): User[] => {
     const stored = localStorage.getItem('school_users_db');
-    if (!stored) {
-      // Инициализируем базу из моков, если она пуста
-      localStorage.setItem('school_users_db', JSON.stringify(MOCK_USERS));
-      return MOCK_USERS;
-    }
-    return JSON.parse(stored);
+    return stored ? JSON.parse(stored) : MOCK_USERS;
   };
 
   const handleAuth = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     const users = getUsersFromStorage();
 
     if (isRegistering) {
-      // Регистрация
-      const exists = users.find(u => u.contactInfo === contactInfo);
-      if (exists) {
-        setError('Пользователь с таким логином уже существует');
-        return;
-      }
-
+      // Registration Logic
       const newUser: User = {
         id: `user_${Date.now()}`,
         name,
         contactInfo,
-        password, // Сохраняем введенный пароль
+        password,
         role: null,
         isApproved: false,
         isAdmin: false,
         avatar: `https://picsum.photos/seed/${contactInfo}/100`
       };
-      
       const updatedUsers = [...users, newUser];
       localStorage.setItem('school_users_db', JSON.stringify(updatedUsers));
       onLogin(newUser);
     } else {
-      // Вход
+      // Login Logic with Password Verification
       const foundUser = users.find(u => u.contactInfo === contactInfo);
       
       if (foundUser) {
         if (foundUser.password === password) {
           onLogin(foundUser);
         } else {
-          setError('Неверный пароль');
+          alert('Неверный пароль. Попробуйте снова.');
         }
       } else {
-        setError('Пользователь не найден');
+        alert('Пользователь не найден. Пожалуйста, зарегистрируйтесь.');
       }
     }
   };
 
   return (
     <div className="flex-1 flex items-center justify-center bg-slate-900 p-4 relative overflow-hidden">
-      {/* Декоративный фон */}
+      {/* Decorative background */}
       <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]"></div>
@@ -86,24 +72,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-8">
           <button 
-            onClick={() => { setIsRegistering(false); setError(''); }}
+            onClick={() => setIsRegistering(false)}
             className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${!isRegistering ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
             Вход
           </button>
           <button 
-            onClick={() => { setIsRegistering(true); setError(''); }}
+            onClick={() => setIsRegistering(true)}
             className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${isRegistering ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
           >
             Регистрация
           </button>
         </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 text-xs font-bold rounded-r-xl animate-bounce">
-            ⚠️ {error}
-          </div>
-        )}
 
         <form onSubmit={handleAuth} className="space-y-6">
           {isRegistering && (
@@ -121,7 +101,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           )}
           
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest ml-1">Логин (Телефон или Почта)</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest ml-1">Телефон или Логин</label>
             <input
               type="text"
               value={contactInfo}
@@ -155,7 +135,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         <p className="mt-8 text-center text-[10px] text-slate-300 font-bold uppercase tracking-widest leading-relaxed">
           {isRegistering 
             ? 'После регистрации администратор школы должен подтвердить ваш профиль и назначить роль.'
-            : 'Для входа как админ используйте логин "admin" и пароль "admin".'}
+            : 'Забыли данные? Обратитесь к администратору вашего учебного заведения.'}
         </p>
       </div>
     </div>
