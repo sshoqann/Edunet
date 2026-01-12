@@ -2,7 +2,8 @@
 export enum UserRole {
   STUDENT = 'STUDENT',
   TEACHER = 'TEACHER',
-  PARENT = 'PARENT'
+  PARENT = 'PARENT',
+  ADMIN = 'ADMIN'
 }
 
 export enum HomeworkStatus {
@@ -21,10 +22,14 @@ export interface Subject {
 export interface User {
   id: string;
   name: string;
-  role: UserRole;
+  role: UserRole | null;
   avatar: string;
+  contactInfo: string; // Email or Phone (used as Login)
+  password: string;    // Password for login
+  isApproved: boolean;
+  isAdmin: boolean;
   age?: number;
-  grade?: string; // e.g., "8-A"
+  grade?: string;
   childrenIds?: string[]; 
 }
 
@@ -41,7 +46,7 @@ export interface Group {
 export interface LessonPlan {
   id: string;
   subjectId: string;
-  groupId: string; // Linked to a specific group
+  groupId: string;
   title: string;
   date: string;
   description: string;
