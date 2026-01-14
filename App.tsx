@@ -5,6 +5,7 @@ import Login from './views/Login';
 import TeacherDashboard from './views/TeacherDashboard';
 import StudentDashboard from './views/StudentDashboard';
 import ParentDashboard from './views/ParentDashboard';
+import AdminDashboard from './views/AdminDashboard';
 import { User, UserRole } from './types';
 
 const App: React.FC = () => {
@@ -41,6 +42,7 @@ const App: React.FC = () => {
             path="/" 
             element={
               user ? (
+                user.role === UserRole.ADMIN ? <AdminDashboard user={user} onLogout={handleLogout} /> :
                 user.role === UserRole.TEACHER ? <TeacherDashboard user={user} onLogout={handleLogout} /> :
                 user.role === UserRole.STUDENT ? <StudentDashboard user={user} onLogout={handleLogout} /> :
                 <ParentDashboard user={user} onLogout={handleLogout} />

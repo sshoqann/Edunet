@@ -2,7 +2,8 @@
 export enum UserRole {
   STUDENT = 'STUDENT',
   TEACHER = 'TEACHER',
-  PARENT = 'PARENT'
+  PARENT = 'PARENT',
+  ADMIN = 'ADMIN'
 }
 
 export enum HomeworkStatus {
@@ -21,27 +22,35 @@ export interface Subject {
 export interface User {
   id: string;
   name: string;
-  role: UserRole;
+  role: UserRole | null;
   avatar: string;
+  contactInfo: string; // Used as login
+  password?: string;
+  isApproved: boolean;
+  isAdmin: boolean;
   age?: number;
-  grade?: string; // e.g., "8-A"
+  grade?: string; 
   childrenIds?: string[]; 
 }
 
 export interface Group {
   id: string;
   name: string;
+  subjectId: string; // Relationship to Subject
+  teacherId?: string; // Assigned Teacher
+  studentIds: string[]; // List of Students
   grade: string;
-  ageRange: string;
-  studentIds: string[];
-  performanceLevel: 'Высокая' | 'Средняя' | 'Требует внимания';
-  averageScore: number;
+  // Added optional fields to resolve data.ts and TeacherDashboard.tsx errors
+  ageRange?: string;
+  performanceLevel?: string;
+  averageScore?: number;
 }
 
 export interface LessonPlan {
   id: string;
   subjectId: string;
-  groupId: string; // Linked to a specific group
+  groupId: string;
+  teacherId: string;
   title: string;
   date: string;
   description: string;
@@ -52,14 +61,15 @@ export interface LessonPlan {
   attendance: string[]; 
 }
 
-export interface Quiz {
-  id: string;
-  title: string;
-  questions: Question[];
+export interface Grade {
+  studentId: string;
   lessonId: string;
+  score: number; 
+  feedback?: string;
+  date: string;
 }
 
-export interface Question {
+export interface QuizQuestion {
   id: string;
   text: string;
   options: string[];
@@ -68,10 +78,9 @@ export interface Question {
   mediaType?: 'image' | 'video';
 }
 
-export interface Grade {
-  studentId: string;
+export interface Quiz {
+  id: string;
+  title: string;
   lessonId: string;
-  score: number; 
-  feedback?: string;
-  date: string;
+  questions: QuizQuestion[];
 }

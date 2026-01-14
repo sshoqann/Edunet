@@ -51,7 +51,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
     setNewQuestionMedia({ url: mockUrl, type });
   };
 
-  const getPerformanceColor = (level: string) => {
+  // Fixed: Allow level to be string or undefined to accommodate optional Group.performanceLevel
+  const getPerformanceColor = (level: string | undefined) => {
     if (level === 'Высокая') return 'text-green-600 bg-green-100';
     if (level === 'Средняя') return 'text-yellow-600 bg-yellow-100';
     return 'text-red-600 bg-red-100';
@@ -245,11 +246,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                             <h3 className="text-2xl font-black text-gray-800">{group.name}</h3>
                             <div className="flex gap-2 mt-2">
                                <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-3 py-1 rounded-full uppercase tracking-widest">{group.grade}</span>
-                               <span className="text-[10px] font-black bg-blue-50 text-blue-600 px-3 py-1 rounded-full uppercase tracking-widest">{group.ageRange}</span>
+                               <span className="text-[10px] font-black bg-blue-50 text-blue-600 px-3 py-1 rounded-full uppercase tracking-widest">{group.ageRange || 'Н/Д'}</span>
                             </div>
                           </div>
                           <span className={`text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-widest ${getPerformanceColor(group.performanceLevel)}`}>
-                            {group.performanceLevel}
+                            {group.performanceLevel || 'Средняя'}
                           </span>
                         </div>
 
@@ -260,7 +261,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) =
                           </div>
                           <div className="text-center">
                              <p className="text-[10px] font-black text-slate-300 uppercase mb-1">Ср. балл</p>
-                             <p className="text-3xl font-black text-indigo-600">{group.averageScore}</p>
+                             <p className="text-3xl font-black text-indigo-600">{group.averageScore || 'Н/Д'}</p>
                           </div>
                           <div className="text-center">
                              <p className="text-[10px] font-black text-slate-300 uppercase mb-1">Активность</p>

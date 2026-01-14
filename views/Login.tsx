@@ -8,87 +8,84 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.STUDENT);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simplified login logic: find user by role from mock data
-    const user = MOCK_USERS.find(u => u.role === selectedRole);
+    setError('');
+
+    // In a real app, this would be an API call
+    const user = MOCK_USERS.find(u => u.contactInfo === login && u.password === password);
+    
     if (user) {
+      if (!user.isApproved) {
+        setError('Ваш аккаунт еще не подтвержден администратором.');
+        return;
+      }
       onLogin(user);
+    } else {
+      setError('Неверный логин или пароль');
     }
   };
 
-  const roles = [
-    { type: UserRole.STUDENT, label: 'Ученик', icon: '🎓' },
-    { type: UserRole.TEACHER, label: 'Учитель', icon: '👨‍🏫' },
-    { type: UserRole.PARENT, label: 'Родитель', icon: '👨‍👩‍👧' },
-  ];
-
   return (
-    <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-700 p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-300">
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-3xl font-bold mb-4 shadow-lg">
+    <div className="flex-1 flex items-center justify-center bg-slate-900 p-4">
+      <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-500">
+        <div className="flex flex-col items-center mb-10">
+          <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white text-4xl font-black mb-6 shadow-2xl shadow-indigo-200">
             EN
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">EduNexus</h1>
-          <p className="text-gray-500 text-sm">Образовательная платформа будущего</p>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">EduNexus</h1>
+          <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">Smart School Control</p>
         </div>
 
-        <div className="flex justify-between mb-8 gap-2">
-          {roles.map((r) => (
-            <button
-              key={r.type}
-              onClick={() => setSelectedRole(r.type)}
-              className={`flex-1 py-3 px-2 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
-                selectedRole === r.type
-                  ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
-                  : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'
-              }`}
-            >
-              <span className="text-2xl">{r.icon}</span>
-              <span className="text-xs font-semibold uppercase">{r.label}</span>
-            </button>
-          ))}
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-xs font-bold border border-red-100 animate-bounce">
+              ⚠️ {error}
+            </div>
+          )}
+          
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Логин</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest ml-1">Логин</label>
             <input
               type="text"
               value={login}
               onChange={(e) => setLogin(e.target.value)}
-              placeholder="user@edu.com"
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+              placeholder="admin / teacher1 / student1"
+              className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700"
               required
             />
           </div>
+          
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Пароль</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest ml-1">Пароль</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700"
               required
             />
           </div>
+
           <button
             type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow-md transition-all transform active:scale-[0.98]"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-5 rounded-3xl shadow-2xl shadow-indigo-100 transition-all transform active:scale-[0.97] uppercase text-xs tracking-widest"
           >
             Войти в систему
           </button>
         </form>
         
-        <p className="mt-6 text-center text-xs text-gray-400">
-          Забыли пароль? Обратитесь к администратору школы.
-        </p>
+        <div className="mt-10 text-center">
+           <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest leading-relaxed">
+             Только администратор может создавать новые учетные записи. 
+             Если вы забыли пароль, обратитесь в ИТ-отдел школы.
+           </p>
+        </div>
       </div>
     </div>
   );
