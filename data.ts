@@ -1,5 +1,5 @@
 
-import { UserRole, User, LessonPlan, Quiz, Subject, Group, Grade } from './types';
+import { UserRole, User, LessonPlan, Subject, Group, Grade } from './types';
 
 export const MOCK_SUBJECTS: Subject[] = [
   { id: 'sub1', name: 'Физика', icon: '⚛️', color: 'bg-indigo-500' },
@@ -11,7 +11,7 @@ export const MOCK_SUBJECTS: Subject[] = [
 export const MOCK_USERS: User[] = [
   { 
     id: 'admin_root', 
-    name: 'Главный Администратор', 
+    name: 'Администратор Системы', 
     role: UserRole.ADMIN, 
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin',
     contactInfo: 'admin',
@@ -38,14 +38,13 @@ export const MOCK_USERS: User[] = [
     password: '123',
     isApproved: true,
     isAdmin: false,
-    age: 14, 
     grade: '8-А' 
   },
   { 
     id: 'p1', 
     name: 'Дмитрий Иванов', 
     role: UserRole.PARENT, 
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=p1',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=parent',
     contactInfo: 'parent1',
     password: '123',
     isApproved: true,
@@ -57,13 +56,11 @@ export const MOCK_USERS: User[] = [
 export const MOCK_GROUPS: Group[] = [
   {
     id: 'g1',
-    name: '8-А Основная',
-    subjectId: 'sub1', // Added missing mandatory subjectId
+    name: '8-А Физика',
+    subjectId: 'sub1',
     grade: '8-А',
-    ageRange: '13-14 лет',
-    studentIds: ['s1'],
-    performanceLevel: 'Высокая',
-    averageScore: 92
+    teacherId: 't1',
+    studentIds: ['s1']
   }
 ];
 
@@ -75,27 +72,13 @@ export const MOCK_LESSONS: LessonPlan[] = [
     teacherId: 't1',
     title: 'Законы Ньютона',
     date: '2024-05-20',
-    description: 'Введение в динамику.',
-    homeworkCheck: 'Задача на расчет силы трения.',
-    newHomework: 'Нарисовать силы.',
-    attendance: ['s1']
+    description: 'Изучаем основные законы движения.',
+    newHomework: 'Решить задачи на стр. 45',
+    isDrawingEnabled: true,
+    questions: [
+      { id: 'q1', text: 'Первый закон Ньютона?', options: ['Инерция', 'Сила', 'Масса', 'Ускорение'], correctIndex: 0 }
+    ],
+    attendance: [],
+    chat: []
   }
 ];
-
-export const MOCK_GRADES: Grade[] = [
-  { studentId: 's1', lessonId: 'l1', score: 95, date: '2024-05-20', feedback: 'Отлично!' }
-];
-
-export const MOCK_QUIZ: Quiz = {
-  id: 'q1',
-  title: 'Тест по динамике',
-  lessonId: 'l1',
-  questions: [
-    {
-      id: 'ques1',
-      text: 'Второй закон Ньютона?',
-      options: ['F = ma', 'E = mc2', 'F = Gmm/r2', 'P = UI'],
-      correctIndex: 0
-    }
-  ]
-};

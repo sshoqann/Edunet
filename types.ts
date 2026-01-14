@@ -7,9 +7,9 @@ export enum UserRole {
 }
 
 export enum HomeworkStatus {
-  NOT_DONE = 'NOT_DONE',
+  COMPLETE = 'COMPLETE',
   PARTIAL = 'PARTIAL',
-  COMPLETE = 'COMPLETE'
+  NONE = 'NONE'
 }
 
 export interface Subject {
@@ -24,11 +24,10 @@ export interface User {
   name: string;
   role: UserRole | null;
   avatar: string;
-  contactInfo: string; // Used as login
+  contactInfo: string; 
   password?: string;
   isApproved: boolean;
   isAdmin: boolean;
-  age?: number;
   grade?: string; 
   childrenIds?: string[]; 
 }
@@ -36,14 +35,26 @@ export interface User {
 export interface Group {
   id: string;
   name: string;
-  subjectId: string; // Relationship to Subject
-  teacherId?: string; // Assigned Teacher
-  studentIds: string[]; // List of Students
+  subjectId: string;
+  teacherId?: string;
+  studentIds: string[];
   grade: string;
-  // Added optional fields to resolve data.ts and TeacherDashboard.tsx errors
-  ageRange?: string;
-  performanceLevel?: string;
-  averageScore?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  text: string;
+  timestamp: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  text: string;
+  options: string[];
+  correctIndex: number;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video' | 'audio';
 }
 
 export interface LessonPlan {
@@ -54,33 +65,33 @@ export interface LessonPlan {
   title: string;
   date: string;
   description: string;
-  homeworkCheck: string;
   newHomework: string;
   videoUrl?: string;
   meetingLink?: string;
+  zoomLink?: string;
+  isDrawingEnabled: boolean;
+  drawingBaseImage?: string;
+  quizFile?: string; // URL for PDF/DOC
+  questions: QuizQuestion[];
   attendance: string[]; 
+  isStarted?: boolean;
+  chat?: ChatMessage[];
+}
+
+export interface Submission {
+  id: string;
+  studentId: string;
+  lessonId: string;
+  homeworkImageUrl?: string;
+  testScore?: number;
+  testFinished: boolean;
+  drawingData?: string;
 }
 
 export interface Grade {
   studentId: string;
   lessonId: string;
   score: number; 
-  feedback?: string;
   date: string;
-}
-
-export interface QuizQuestion {
-  id: string;
-  text: string;
-  options: string[];
-  correctIndex: number;
-  mediaUrl?: string;
-  mediaType?: 'image' | 'video';
-}
-
-export interface Quiz {
-  id: string;
-  title: string;
-  lessonId: string;
-  questions: QuizQuestion[];
+  type: 'formative' | 'test' | 'final';
 }

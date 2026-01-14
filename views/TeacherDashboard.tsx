@@ -1,9 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
-import { User, LessonPlan, Grade, HomeworkStatus, Group } from '../types';
-import { MOCK_LESSONS, MOCK_USERS, MOCK_GROUPS, MOCK_GRADES } from '../data';
+import React, { useState, useEffect } from 'react';
+import { User, LessonPlan, Grade, Group, Submission, ChatMessage, QuizQuestion } from '../types';
+import { MOCK_LESSONS, MOCK_USERS, MOCK_GROUPS } from '../data';
 import DrawingTask from '../components/DrawingTask';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
 
 interface TeacherDashboardProps {
   user: User;
@@ -11,569 +10,484 @@ interface TeacherDashboardProps {
 }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'planning' | 'lessons' | 'groups'>('planning');
-  const [localGroups, setLocalGroups] = useState<Group[]>(MOCK_GROUPS);
-  const [lessons] = useState<LessonPlan[]>(MOCK_LESSONS);
-  const [grades, setGrades] = useState<Grade[]>(MOCK_GRADES);
+  const [activeTab, setActiveTab] = useState<'planning' | 'lessons' | 'journal' | 'summary'>('planning');
   
+  // App State with Persistence
+  const [lessons, setLessons] = useState<LessonPlan[]>(() => {
+    const saved = localStorage.getItem('school_lessons');
+    return saved ? JSON.parse(saved) : MOCK_LESSONS;
+  });
+  const [grades, setGrades] = useState<Grade[]>(() => {
+    const saved = localStorage.getItem('school_grades');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [submissions] = useState<Submission[]>(() => {
+    const saved = localStorage.getItem('school_submissions');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [groups] = useState<Group[]>(() => {
+    const saved = localStorage.getItem('school_groups');
+    const all = saved ? JSON.parse(saved) : MOCK_GROUPS;
+    // ONLY groups assigned to THIS teacher
+    return all.filter((g: Group) => g.teacherId === user.id);
+  });
+
+  // UI States
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<LessonPlan | null>(null);
-  const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [newQuestionMedia, setNewQuestionMedia] = useState<{url: string, type: 'image' | 'video'} | null>(null);
+  const [showAddLesson, setShowAddLesson] = useState(false);
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [copyTarget, setCopyTarget] = useState<LessonPlan | null>(null);
+  
+  // Quiz Editor State within the modal
+  const [editorQuestions, setEditorQuestions] = useState<QuizQuestion[]>([]);
+  const [isDrawingEnabled, setIsDrawingEnabled] = useState(false);
+  const [quizFile, setQuizFile] = useState<string | undefined>(undefined);
 
-  // Planning state
-  const [planningGroup, setPlanningGroup] = useState<Group | null>(null);
-  const [editingGroupNameId, setEditingGroupNameId] = useState<string | null>(null);
-  const [tempGroupName, setTempGroupName] = useState("");
+  useEffect(() => {
+    localStorage.setItem('school_lessons', JSON.stringify(lessons));
+  }, [lessons]);
 
-  const allStudents = MOCK_USERS.filter(u => u.role === 'STUDENT');
+  useEffect(() => {
+    localStorage.setItem('school_grades', JSON.stringify(grades));
+  }, [grades]);
 
-  const filteredPlanningLessons = useMemo(() => {
-    if (!planningGroup) return [];
-    return lessons.filter(l => l.groupId === planningGroup.id);
-  }, [planningGroup, lessons]);
+  const students = MOCK_USERS.filter(u => u.role === 'STUDENT');
 
-  const studentGrades = useMemo(() => {
-    if (!selectedStudent) return [];
-    return grades.filter(g => g.studentId === selectedStudent.id);
-  }, [selectedStudent, grades]);
-
-  const handleUpdateGroupName = (id: string) => {
-    setLocalGroups(prev => prev.map(g => g.id === id ? { ...g, name: tempGroupName } : g));
-    setEditingGroupNameId(null);
+  // Open Editor Modal
+  const openEditor = (lesson: LessonPlan | null = null) => {
+    if (lesson) {
+      setSelectedLesson(lesson);
+      setEditorQuestions(lesson.questions || []);
+      setIsDrawingEnabled(lesson.isDrawingEnabled || false);
+      setQuizFile(lesson.quizFile);
+    } else {
+      setSelectedLesson(null);
+      setEditorQuestions([]);
+      setIsDrawingEnabled(false);
+      setQuizFile(undefined);
+    }
+    setShowAddLesson(true);
   };
 
-  const handleMediaUpload = (type: 'image' | 'video') => {
-    const mockUrl = type === 'image' 
-      ? 'https://picsum.photos/seed/quiz/400/200' 
-      : 'https://www.w3schools.com/html/mov_bbb.mp4';
-    setNewQuestionMedia({ url: mockUrl, type });
+  const handleSaveLesson = (e: React.FormEvent) => {
+    e.preventDefault();
+    const f = e.target as any;
+    const newLesson: LessonPlan = {
+      id: selectedLesson ? selectedLesson.id : `l_${Date.now()}`,
+      subjectId: selectedGroup?.subjectId || selectedLesson?.subjectId || 'sub1',
+      groupId: selectedGroup?.id || selectedLesson?.groupId || '',
+      teacherId: user.id,
+      title: f.title.value,
+      date: f.date.value,
+      description: f.description.value,
+      newHomework: f.homework.value,
+      videoUrl: f.videoUrl.value,
+      meetingLink: f.meetingLink.value,
+      zoomLink: f.zoomLink.value,
+      isDrawingEnabled: isDrawingEnabled,
+      quizFile: quizFile,
+      questions: editorQuestions,
+      attendance: selectedLesson?.attendance || [],
+      chat: selectedLesson?.chat || []
+    };
+
+    if (selectedLesson) {
+      setLessons(prev => prev.map(l => l.id === selectedLesson.id ? newLesson : l));
+    } else {
+      setLessons([...lessons, newLesson]);
+    }
+    setShowAddLesson(false);
   };
 
-  // Fixed: Allow level to be string or undefined to accommodate optional Group.performanceLevel
-  const getPerformanceColor = (level: string | undefined) => {
-    if (level === 'Высокая') return 'text-green-600 bg-green-100';
-    if (level === 'Средняя') return 'text-yellow-600 bg-yellow-100';
-    return 'text-red-600 bg-red-100';
+  const addQuestion = () => {
+    const q: QuizQuestion = {
+      id: `q_${Date.now()}`,
+      text: '',
+      options: ['', '', '', ''],
+      correctIndex: 0
+    };
+    setEditorQuestions([...editorQuestions, q]);
+  };
+
+  const startLesson = (lesson: LessonPlan) => {
+    setLessons(prev => prev.map(l => l.id === lesson.id ? { ...l, isStarted: true } : l));
+    setSelectedLesson(lesson);
+    setIsLiveMode(true);
+    setActiveTab('lessons');
+    setSelectedGroup(null);
+  };
+
+  const copyLessonToGroup = (targetGroupId: string) => {
+    if (!copyTarget) return;
+    const copied: LessonPlan = {
+      ...copyTarget,
+      id: `l_${Date.now()}`,
+      groupId: targetGroupId,
+      isStarted: false,
+      chat: [],
+      attendance: []
+    };
+    setLessons([...lessons, copied]);
+    setCopyTarget(null);
+    alert('Урок успешно скопирован в выбранную группу!');
+  };
+
+  const handleSendLink = () => {
+    if (!selectedLesson || !chatInput.trim()) return;
+    const msg: ChatMessage = {
+      id: `msg_${Date.now()}`,
+      senderId: user.id,
+      text: chatInput,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setLessons(prev => prev.map(l => l.id === selectedLesson.id ? { ...l, chat: [...(l.chat || []), msg] } : l));
+    setChatInput('');
+  };
+
+  const updateGrade = (sid: string, lid: string, score: number) => {
+    const newGrade: Grade = { studentId: sid, lessonId: lid, score, date: new Date().toISOString(), type: 'formative' };
+    setGrades(prev => {
+      const filtered = prev.filter(g => !(g.studentId === sid && g.lessonId === lid));
+      return [...filtered, newGrade];
+    });
   };
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row h-screen bg-gray-50 overflow-hidden text-gray-900 font-sans">
+    <div className="flex-1 flex h-screen bg-slate-50 overflow-hidden font-sans">
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-white border-r border-gray-200 flex flex-col shrink-0 z-20 shadow-xl">
-        <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-100">EN</div>
-          <div>
-            <h2 className="font-black text-gray-800 leading-tight">EduNexus</h2>
-            <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Teacher Pro</span>
-          </div>
+      <aside className="w-72 bg-slate-900 text-white flex flex-col shrink-0 z-30 shadow-2xl">
+        <div className="p-8 border-b border-slate-800 flex items-center gap-4">
+          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-xl font-black">EN</div>
+          <div><h2 className="font-black text-lg">EduNexus</h2><p className="text-[10px] text-indigo-400 font-bold uppercase">Учитель</p></div>
         </div>
-
-        <nav className="flex-1 py-6 overflow-y-auto px-4 space-y-2">
-          <button 
-            onClick={() => { setActiveTab('planning'); setPlanningGroup(null); setSelectedGroup(null); setSelectedStudent(null); }}
-            className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'planning' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-gray-500 hover:bg-gray-50'}`}
-          >
-            <span className="mr-3">🗓️</span> Планирование
-          </button>
-          <button 
-            onClick={() => { setActiveTab('groups'); setSelectedStudent(null); setPlanningGroup(null); }}
-            className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'groups' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-gray-500 hover:bg-gray-50'}`}
-          >
-            <span className="mr-3">👥</span> Группы и Ученики
-          </button>
-          <button 
-            onClick={() => { setActiveTab('lessons'); setPlanningGroup(null); }}
-            className={`w-full flex items-center px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'lessons' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-gray-500 hover:bg-gray-50'}`}
-          >
-            <span className="mr-3">📖</span> Уроки и Журнал
-          </button>
+        <nav className="flex-1 py-8 px-4 space-y-2">
+          <button onClick={() => { setActiveTab('planning'); setIsLiveMode(false); }} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'planning' ? 'bg-indigo-600' : 'text-slate-400 hover:bg-slate-800'}`}>🗓️ Планирование</button>
+          <button onClick={() => setActiveTab('lessons')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'lessons' ? 'bg-indigo-600' : 'text-slate-400 hover:bg-slate-800'}`}>📖 Журнал урока</button>
+          <button onClick={() => { setActiveTab('summary'); setIsLiveMode(false); }} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === 'summary' ? 'bg-indigo-600' : 'text-slate-400 hover:bg-slate-800'}`}>📊 Сводный журнал</button>
         </nav>
-
-        <div className="p-6 mt-auto border-t border-gray-100">
-          <div className="flex items-center gap-3 mb-6 bg-slate-50 p-3 rounded-2xl">
-            <img src={user.avatar} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" alt="" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-black truncate">{user.name}</p>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">Физика и Математика</p>
-            </div>
+        <div className="p-8 border-t border-slate-800">
+          <div className="flex items-center gap-3 mb-6">
+            <img src={user.avatar} className="w-10 h-10 rounded-full border border-indigo-500" />
+            <div className="min-w-0"><p className="text-xs font-black truncate">{user.name}</p></div>
           </div>
-          <button onClick={onLogout} className="w-full text-center text-xs text-red-500 hover:text-red-700 font-black uppercase tracking-widest p-2 border border-red-50 rounded-xl hover:bg-red-50 transition-all">
-            Выйти
-          </button>
+          <button onClick={onLogout} className="w-full py-4 rounded-xl bg-slate-800 text-red-400 text-xs font-black uppercase hover:bg-red-500 transition-all">Выйти</button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-10">
+      <main className="flex-1 overflow-y-auto p-10 bg-slate-50">
+        
+        {/* PLANNING TAB */}
         {activeTab === 'planning' && (
-          <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {!planningGroup ? (
-              <>
-                <div>
-                  <h1 className="text-3xl font-black text-slate-800">Планирование по группам</h1>
-                  <p className="text-slate-400 text-sm mt-1">Выберите группу, чтобы составить календарный план уроков</p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {localGroups.map(group => (
-                    <div 
-                      key={group.id} 
-                      className="group bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col cursor-pointer relative"
-                      onClick={() => editingGroupNameId !== group.id && setPlanningGroup(group)}
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                          📚
-                        </div>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setEditingGroupNameId(group.id); setTempGroupName(group.name); }}
-                          className="p-2 text-slate-300 hover:text-indigo-600 transition-colors"
-                        >
-                          ✎
-                        </button>
-                      </div>
-
-                      {editingGroupNameId === group.id ? (
-                        <div className="flex flex-col gap-2 mb-4" onClick={(e) => e.stopPropagation()}>
-                          <input 
-                            autoFocus
-                            value={tempGroupName}
-                            onChange={(e) => setTempGroupName(e.target.value)}
-                            className="bg-slate-50 border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm font-bold outline-none"
-                          />
-                          <div className="flex gap-2">
-                            <button onClick={() => handleUpdateGroupName(group.id)} className="bg-indigo-600 text-white text-[10px] px-3 py-1 rounded-lg font-bold">ОК</button>
-                            <button onClick={() => setEditingGroupNameId(null)} className="bg-slate-200 text-slate-500 text-[10px] px-3 py-1 rounded-lg font-bold">Отмена</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <h3 className="text-xl font-black text-slate-800 mb-1">{group.name}</h3>
-                      )}
-
-                      <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{group.grade} • {group.studentIds.length} учеников</p>
-                      
-                      <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between">
-                         <span className="text-[10px] text-slate-400 font-bold uppercase">Нагрузка: 4 ч/нед</span>
-                         <span className="text-indigo-600 text-xs font-black">Открыть план →</span>
-                      </div>
+          <div className="animate-in fade-in duration-500">
+            <header className="mb-12">
+               <h1 className="text-4xl font-black text-slate-800 tracking-tight">Ваши группы</h1>
+               <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-2 ml-1">Только назначенные администратором классы</p>
+            </header>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+               {groups.map(g => (
+                 <div key={g.id} className="bg-white p-8 rounded-[48px] shadow-sm border border-slate-100 hover:shadow-2xl transition-all group cursor-pointer" onClick={() => setSelectedGroup(g)}>
+                    <div className="flex justify-between items-start mb-10">
+                       <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center text-3xl group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">📚</div>
+                       <span className="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">{g.grade}</span>
                     </div>
-                  ))}
+                    <h3 className="text-2xl font-black text-slate-800 mb-2">{g.name}</h3>
+                    <p className="text-sm text-slate-400 mb-6">{lessons.filter(l => l.groupId === g.id).length} запланированных уроков</p>
+                    <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest group-hover:translate-x-2 transition-transform">Управление планом →</div>
+                 </div>
+               ))}
+            </div>
 
-                  <button 
-                    onClick={() => setShowCreateGroup(true)}
-                    className="border-4 border-dashed border-gray-100 rounded-[32px] p-6 flex flex-col items-center justify-center text-gray-300 hover:text-indigo-400 hover:border-indigo-100 hover:bg-indigo-50/30 transition-all"
-                  >
-                    <span className="text-4xl mb-2">+</span>
-                    <span className="text-xs font-black uppercase tracking-widest">Новая группа</span>
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="animate-in slide-in-from-right-8 duration-500 space-y-8">
-                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={() => setPlanningGroup(null)} 
-                      className="w-10 h-10 flex items-center justify-center bg-white border border-gray-100 rounded-full shadow-sm hover:bg-gray-50 transition-all"
-                    >
-                      ←
-                    </button>
-                    <div>
-                      <h1 className="text-3xl font-black text-slate-800">План: {planningGroup.name}</h1>
-                      <p className="text-slate-400 text-sm mt-1">{planningGroup.grade} • Календарно-тематическое планирование</p>
+            {selectedGroup && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
+                 <div className="bg-white rounded-[56px] w-full max-w-4xl p-12 max-h-[90vh] overflow-y-auto relative shadow-2xl animate-in zoom-in duration-300">
+                    <button onClick={() => setSelectedGroup(null)} className="absolute top-10 right-10 text-3xl font-black text-slate-300 hover:text-slate-800">✕</button>
+                    <h2 className="text-3xl font-black text-slate-800 mb-10">План занятий: {selectedGroup.name}</h2>
+                    
+                    <div className="space-y-4 mb-10">
+                       {lessons.filter(l => l.groupId === selectedGroup.id).map(l => (
+                         <div key={l.id} className="bg-slate-50 p-6 rounded-3xl border-l-8 border-indigo-600 flex justify-between items-center hover:bg-white hover:shadow-xl transition-all">
+                            <div>
+                               <p className="text-[10px] font-black text-indigo-500 uppercase">{l.date}</p>
+                               <h4 className="text-lg font-black text-slate-800">{l.title}</h4>
+                            </div>
+                            <div className="flex gap-2">
+                               <button onClick={() => setCopyTarget(l)} className="px-4 py-2 bg-white border border-slate-100 rounded-xl text-[10px] font-black uppercase hover:text-indigo-600">Копировать</button>
+                               <button onClick={() => openEditor(l)} className="px-4 py-2 bg-white border border-slate-100 rounded-xl text-[10px] font-black uppercase hover:text-indigo-600">Редактор</button>
+                               <button onClick={() => startLesson(l)} className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg">Начать урок</button>
+                            </div>
+                         </div>
+                       ))}
                     </div>
-                  </div>
-                  <button className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">+ Создать урок</button>
-                </div>
-
-                <div className="grid gap-4">
-                  {filteredPlanningLessons.length > 0 ? filteredPlanningLessons.map(lesson => (
-                    <div key={lesson.id} className="group bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between hover:shadow-xl transition-all border-l-8 border-l-indigo-500">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                           <span className="text-[10px] font-black text-indigo-500 uppercase">{lesson.date}</span>
-                        </div>
-                        <h3 className="text-lg font-black text-gray-800">{lesson.title}</h3>
-                        <p className="text-sm text-gray-400 line-clamp-1">{lesson.description}</p>
-                      </div>
-                      <div className="flex gap-2 mt-4 sm:mt-0">
-                        <button 
-                          onClick={() => { setSelectedLesson(lesson); setActiveTab('lessons'); }}
-                          className="bg-slate-50 text-slate-600 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-all"
-                        >
-                          Редактировать контент
-                        </button>
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="py-20 text-center border-4 border-dashed border-gray-50 rounded-[48px] bg-white">
-                       <p className="text-slate-300 font-bold text-lg">В этой группе пока нет запланированных уроков</p>
-                       <button className="mt-4 text-indigo-600 font-black uppercase text-xs hover:underline">Добавить первый урок</button>
-                    </div>
-                  )}
-                </div>
+                    <button onClick={() => openEditor(null)} className="w-full bg-slate-900 text-white py-6 rounded-[32px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all">+ Создать новое занятие</button>
+                 </div>
               </div>
             )}
           </div>
         )}
 
-        {activeTab === 'groups' && (
-          <div className="max-w-6xl mx-auto space-y-10 animate-in fade-in duration-500">
-            {!selectedGroup ? (
-              <>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h1 className="text-3xl font-black text-slate-800">Управление Учениками</h1>
-                    <p className="text-slate-400 text-sm mt-1">Детальная статистика и профили каждого учащегося</p>
-                  </div>
-                  <button 
-                    onClick={() => setShowCreateGroup(true)}
-                    className="bg-indigo-600 text-white px-8 py-4 rounded-2xl text-sm font-black shadow-2xl shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all"
-                  >
-                    + Сформировать Класс
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {localGroups.map(group => (
-                    <div key={group.id} className="group bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm hover:shadow-2xl transition-all cursor-pointer overflow-hidden relative" onClick={() => setSelectedGroup(group)}>
-                      <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl group-hover:scale-110 transition-transform">👥</div>
-                      <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-8">
-                          <div>
-                            <h3 className="text-2xl font-black text-gray-800">{group.name}</h3>
-                            <div className="flex gap-2 mt-2">
-                               <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-3 py-1 rounded-full uppercase tracking-widest">{group.grade}</span>
-                               <span className="text-[10px] font-black bg-blue-50 text-blue-600 px-3 py-1 rounded-full uppercase tracking-widest">{group.ageRange || 'Н/Д'}</span>
-                            </div>
-                          </div>
-                          <span className={`text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-widest ${getPerformanceColor(group.performanceLevel)}`}>
-                            {group.performanceLevel || 'Средняя'}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-6 mb-8">
-                          <div className="text-center">
-                             <p className="text-[10px] font-black text-slate-300 uppercase mb-1">Учеников</p>
-                             <p className="text-3xl font-black text-slate-800">{group.studentIds.length}</p>
-                          </div>
-                          <div className="text-center">
-                             <p className="text-[10px] font-black text-slate-300 uppercase mb-1">Ср. балл</p>
-                             <p className="text-3xl font-black text-indigo-600">{group.averageScore || 'Н/Д'}</p>
-                          </div>
-                          <div className="text-center">
-                             <p className="text-[10px] font-black text-slate-300 uppercase mb-1">Активность</p>
-                             <p className="text-3xl font-black text-green-500">92%</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-6 border-t border-gray-50">
-                           <div className="flex -space-x-3">
-                              {group.studentIds.map(sid => (
-                                <img key={sid} src={allStudents.find(s => s.id === sid)?.avatar} className="w-10 h-10 rounded-full border-4 border-white shadow-sm" />
-                              ))}
-                           </div>
-                           <button className="text-indigo-600 text-xs font-black uppercase tracking-widest hover:translate-x-1 transition-transform">Профили учеников →</button>
-                        </div>
+        {/* LESSONS / LIVE JOURNAL TAB */}
+        {activeTab === 'lessons' && (
+           <div className="animate-in fade-in duration-500">
+              {selectedLesson && isLiveMode ? (
+                <div className="space-y-10">
+                   <header className="flex justify-between items-center bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm">
+                      <div className="flex items-center gap-6">
+                         <button onClick={() => setIsLiveMode(false)} className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-2xl">←</button>
+                         <div>
+                            <h1 className="text-3xl font-black text-slate-800">{selectedLesson.title}</h1>
+                            <p className="text-indigo-600 font-black uppercase text-[10px] mt-1">Идет урок • {selectedLesson.date}</p>
+                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="space-y-8 animate-in slide-in-from-right-8 duration-500">
-                <div className="flex items-center justify-between">
-                   <button onClick={() => { setSelectedGroup(null); setSelectedStudent(null); }} className="text-sm font-black text-indigo-600 flex items-center gap-2 hover:bg-indigo-50 p-3 rounded-2xl transition-all">
-                      ← Назад к списку групп
-                   </button>
-                </div>
+                      <div className="flex gap-4">
+                         {selectedLesson.meetingLink && <a href={selectedLesson.meetingLink} target="_blank" className="bg-blue-600 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase shadow-lg">Google Meet</a>}
+                         {selectedLesson.zoomLink && <a href={selectedLesson.zoomLink} target="_blank" className="bg-indigo-600 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase shadow-lg">Zoom</a>}
+                      </div>
+                   </header>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                   {/* Student List Sidebar */}
-                   <div className="lg:col-span-1 space-y-4">
-                      <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm">
-                         <h2 className="text-xl font-black mb-6 flex items-center gap-3">
-                           <span className="w-2 h-8 bg-indigo-600 rounded-full"></span>
-                           Ученики {selectedGroup.name}
-                         </h2>
-                         <div className="space-y-3">
-                            {selectedGroup.studentIds.map(sid => {
-                              const student = allStudents.find(s => s.id === sid);
-                              if (!student) return null;
-                              return (
-                                <button 
-                                  key={sid}
-                                  onClick={() => setSelectedStudent(student)}
-                                  className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all border-2 ${selectedStudent?.id === student.id ? 'border-indigo-500 bg-indigo-50 shadow-lg' : 'border-gray-50 bg-gray-50 hover:border-indigo-200'}`}
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <img src={student.avatar} className="w-10 h-10 rounded-xl shadow-sm" />
-                                    <div className="text-left">
-                                      <p className="text-sm font-black text-slate-800 leading-tight">{student.name}</p>
-                                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{student.age} лет • {student.grade}</p>
-                                    </div>
-                                  </div>
-                                  <span className="text-xs font-black text-indigo-600">95%</span>
-                                </button>
-                              );
-                            })}
+                   <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
+                      <div className="lg:col-span-3 bg-white rounded-[48px] border border-slate-100 shadow-sm overflow-hidden p-8">
+                         <h3 className="text-2xl font-black text-slate-800 mb-8">Журнал группы</h3>
+                         <table className="w-full text-left">
+                            <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                               <tr>
+                                  <th className="px-6 py-4">Ученик</th>
+                                  <th className="px-6 py-4 text-center">ДЗ (фото)</th>
+                                  <th className="px-6 py-4 text-center">Тест</th>
+                                  <th className="px-6 py-4 text-center">Оценка (0-100)</th>
+                                  <th className="px-6 py-4 text-center">Присутствие</th>
+                               </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                               {students.filter(s => {
+                                 const grp = MOCK_GROUPS.find(g => g.id === selectedLesson.groupId);
+                                 return grp?.studentIds.includes(s.id);
+                               }).map(student => {
+                                 const submission = submissions.find(sub => sub.studentId === student.id && sub.lessonId === selectedLesson.id);
+                                 const grade = grades.find(g => g.studentId === student.id && g.lessonId === selectedLesson.id);
+                                 return (
+                                   <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
+                                      <td className="px-6 py-6 flex items-center gap-4">
+                                         <img src={student.avatar} className="w-10 h-10 rounded-full border border-slate-200 shadow-sm" />
+                                         <p className="text-sm font-black text-slate-800">{student.name}</p>
+                                      </td>
+                                      <td className="px-6 py-6 text-center">
+                                         {submission?.homeworkImageUrl ? <button onClick={() => window.open(submission.homeworkImageUrl)} className="text-2xl">🖼️</button> : <span className="text-[10px] text-slate-300 font-bold uppercase">Нет</span>}
+                                      </td>
+                                      <td className="px-6 py-6 text-center">
+                                         <span className={`text-xs font-black ${submission?.testFinished ? 'text-green-600' : 'text-slate-300'}`}>
+                                            {submission?.testScore !== undefined ? `${submission.testScore}%` : submission?.testFinished ? 'Сдано' : '—'}
+                                         </span>
+                                      </td>
+                                      <td className="px-6 py-6 text-center">
+                                         <input 
+                                           type="number" 
+                                           defaultValue={grade?.score || 0}
+                                           onBlur={(e) => updateGrade(student.id, selectedLesson.id, parseInt(e.target.value))}
+                                           className="w-16 bg-slate-50 border-2 border-transparent focus:border-indigo-100 rounded-xl p-2 text-center font-black text-indigo-600 outline-none" 
+                                         />
+                                      </td>
+                                      <td className="px-6 py-6 text-center">
+                                         <input type="checkbox" className="w-5 h-5 rounded-lg text-indigo-600" defaultChecked />
+                                      </td>
+                                   </tr>
+                                 );
+                               })}
+                            </tbody>
+                         </table>
+                      </div>
+
+                      <div className="lg:col-span-1">
+                         <div className="bg-white p-8 rounded-[48px] border border-slate-100 shadow-sm h-[600px] flex flex-col sticky top-10">
+                            <h3 className="text-xl font-black text-slate-800 mb-6">Чат ссылок</h3>
+                            <div className="flex-1 overflow-y-auto space-y-4 mb-6 pr-2 scrollbar-hide">
+                               {selectedLesson.chat?.map(msg => (
+                                 <div key={msg.id} className="bg-indigo-50 p-4 rounded-3xl border border-indigo-100">
+                                    <p className="text-sm text-slate-700 font-medium break-words leading-relaxed">{msg.text}</p>
+                                    <span className="text-[9px] font-black text-indigo-300 uppercase block mt-2">{msg.timestamp}</span>
+                                 </div>
+                               ))}
+                               {!selectedLesson.chat?.length && <p className="text-center text-slate-300 py-10 font-bold uppercase text-[10px]">Ваши ссылки появятся здесь</p>}
+                            </div>
+                            <div className="space-y-4">
+                               <textarea 
+                                 value={chatInput} 
+                                 onChange={(e) => setChatInput(e.target.value)} 
+                                 placeholder="Вставьте ссылку для учеников..." 
+                                 className="w-full bg-slate-50 p-4 rounded-2xl text-xs font-bold outline-none h-24 resize-none border-2 border-transparent focus:border-indigo-100 shadow-inner" 
+                               />
+                               <button onClick={handleSendLink} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] shadow-lg">Отправить всем</button>
+                            </div>
                          </div>
                       </div>
                    </div>
+                </div>
+              ) : (
+                <div className="h-[600px] flex flex-col items-center justify-center text-slate-200 border-4 border-dashed border-slate-100 rounded-[64px] bg-white">
+                  <div className="text-8xl mb-8 opacity-5">📓</div>
+                  <h3 className="text-2xl font-black text-slate-300 uppercase tracking-widest">Выберите урок для работы</h3>
+                  <button onClick={() => setActiveTab('planning')} className="mt-8 text-indigo-600 font-black uppercase text-sm hover:underline">Перейти в планирование</button>
+                </div>
+              )}
+           </div>
+        )}
 
-                   {/* Analysis & Detail Area */}
-                   <div className="lg:col-span-2">
-                      {selectedStudent ? (
-                        <div className="space-y-6 animate-in fade-in zoom-in duration-300">
-                           <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden">
-                              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
-                              <div className="flex flex-col sm:flex-row items-center gap-6 mb-10 relative z-10">
-                                 <img src={selectedStudent.avatar} className="w-24 h-24 rounded-[32px] border-4 border-indigo-50 shadow-xl shadow-indigo-100" />
-                                 <div className="text-center sm:text-left">
-                                    <h2 className="text-3xl font-black text-slate-800">{selectedStudent.name}</h2>
-                                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-1">Индивидуальная аналитика</p>
-                                    <div className="flex gap-4 mt-4">
-                                       <div className="bg-green-50 px-4 py-2 rounded-xl">
-                                          <p className="text-[10px] font-black text-green-600 uppercase">Ср. балл</p>
-                                          <p className="text-xl font-black text-green-700">92.0</p>
-                                       </div>
-                                       <div className="bg-blue-50 px-4 py-2 rounded-xl">
-                                          <p className="text-[10px] font-black text-blue-600 uppercase">Пропуски</p>
-                                          <p className="text-xl font-black text-blue-700">1</p>
-                                       </div>
-                                    </div>
-                                 </div>
-                              </div>
-
-                              <div className="h-[250px] mb-10">
-                                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">График успеваемости</h3>
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <AreaChart data={studentGrades}>
-                                    <defs>
-                                      <linearGradient id="studentColor" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                                      </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold'}} domain={[0, 100]} />
-                                    <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                                    <Area type="monotone" dataKey="score" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#studentColor)" />
-                                  </AreaChart>
-                                </ResponsiveContainer>
-                              </div>
-
-                              <div>
-                                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Журнал оценок</h3>
-                                <div className="space-y-3">
-                                   {studentGrades.map((g, idx) => (
-                                     <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-transparent hover:border-indigo-100 transition-all">
-                                        <div className="flex-1">
-                                           <div className="flex items-center gap-2 mb-1">
-                                              <span className="text-[10px] font-black text-slate-400 uppercase">{g.date}</span>
-                                              <p className="text-sm font-black text-slate-700">Урок: {lessons.find(l => l.id === g.lessonId)?.title}</p>
-                                           </div>
-                                           <p className="text-xs text-slate-500 italic">"{g.feedback || 'Без комментария'}"</p>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                           <div className="text-xl font-black text-indigo-600">{g.score}</div>
-                                           <button className="text-xs font-bold text-slate-300 hover:text-indigo-600 transition-colors">✎</button>
-                                        </div>
-                                     </div>
-                                   ))}
-                                </div>
-                              </div>
-                           </div>
-                        </div>
-                      ) : (
-                        <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-gray-300 border-4 border-dashed border-gray-100 rounded-[48px] bg-white">
-                           <div className="text-8xl mb-6 opacity-10">🎓</div>
-                           <h3 className="text-xl font-black text-slate-300">Выберите ученика</h3>
-                        </div>
-                      )}
+        {/* SUMMARY TAB */}
+        {activeTab === 'summary' && (
+           <div className="animate-in fade-in duration-500 space-y-10">
+              <header><h1 className="text-4xl font-black text-slate-800 tracking-tight">Сводный журнал</h1><p className="text-slate-400 font-bold uppercase text-[10px] mt-2">Статистика успеваемости по вашим группам</p></header>
+              {groups.map(g => (
+                <div key={g.id} className="bg-white p-10 rounded-[48px] border border-slate-100 shadow-sm">
+                   <h3 className="text-2xl font-black text-slate-800 mb-8">{g.name}</h3>
+                   <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                         <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase">
+                            <tr><th className="px-6 py-4">Ученик</th><th className="px-6 py-4 text-center">Ср. Формативки</th><th className="px-6 py-4 text-center">Ср. Тесты</th><th className="px-6 py-4 text-center">Итоговая</th></tr>
+                         </thead>
+                         <tbody className="divide-y divide-slate-50">
+                            {students.filter(s => g.studentIds.includes(s.id)).map(student => (
+                              <tr key={student.id} className="hover:bg-slate-50 transition-colors">
+                                 <td className="px-6 py-4 flex items-center gap-3"><img src={student.avatar} className="w-8 h-8 rounded-full border border-slate-100" /><span className="text-sm font-black">{student.name}</span></td>
+                                 <td className="px-6 py-4 text-center font-bold text-slate-600">92</td><td className="px-6 py-4 text-center font-bold text-slate-600">88</td>
+                                 <td className="px-6 py-4 text-center"><span className="bg-indigo-600 text-white px-4 py-1.5 rounded-full text-xs font-black shadow-sm">90</span></td>
+                              </tr>
+                            ))}
+                         </tbody>
+                      </table>
                    </div>
                 </div>
-              </div>
-            )}
-          </div>
+              ))}
+           </div>
         )}
 
-        {activeTab === 'lessons' && (
-          <div className="max-w-6xl mx-auto space-y-8 animate-in slide-in-from-bottom-8 duration-500">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-               <div className="relative group">
-                 <select 
-                  className="bg-white border-2 border-gray-100 rounded-3xl px-6 py-4 text-sm font-black shadow-lg outline-none focus:border-indigo-500 transition-all appearance-none pr-12 min-w-[300px]"
-                  onChange={(e) => setSelectedLesson(lessons.find(l => l.id === e.target.value) || null)}
-                  value={selectedLesson?.id || ""}
-                 >
-                   <option value="" disabled>Выберите активный урок...</option>
-                   {lessons.map(l => <option key={l.id} value={l.id}>{l.title} ({localGroups.find(g => g.id === l.groupId)?.name})</option>)}
-                 </select>
-                 <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-indigo-600 transition-colors">▼</div>
-               </div>
-               {selectedLesson && (
-                 <div className="flex items-center gap-4">
-                    <span className="text-xs bg-green-100 text-green-700 px-4 py-2 rounded-2xl font-black uppercase tracking-widest shadow-sm">Урок в процессе</span>
-                 </div>
-               )}
-            </div>
-
-            {selectedLesson ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                <div className="space-y-8">
-                  <section className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-slate-100/50">
-                    <h2 className="text-xl font-black mb-6 text-slate-800 flex items-center gap-3">
-                      <span className="p-2 bg-indigo-50 text-indigo-600 rounded-xl text-lg">📝</span>
-                      Контент Урока
-                    </h2>
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Проверка ДЗ</label>
-                        <textarea className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl p-4 text-sm font-bold outline-none transition-all h-24" defaultValue={selectedLesson.homeworkCheck} />
+        {/* LESSON EDITOR MODAL */}
+        {showAddLesson && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[200] flex items-center justify-center p-6 overflow-y-auto">
+             <div className="bg-white rounded-[56px] w-full max-w-5xl p-12 shadow-2xl animate-in zoom-in duration-300 my-auto relative">
+                <button onClick={() => setShowAddLesson(false)} className="absolute top-10 right-10 text-3xl font-black text-slate-300 hover:text-slate-800">✕</button>
+                <h2 className="text-4xl font-black text-slate-800 mb-10 text-center tracking-tight">{selectedLesson ? 'Редактировать урок' : 'Создать занятие'}</h2>
+                
+                <form onSubmit={handleSaveLesson} className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                   {/* Left Column: Basic Info */}
+                   <div className="space-y-8">
+                      <div className="group"><label className="text-[10px] font-black text-slate-400 uppercase ml-4 mb-2 block tracking-widest">Название темы</label><input name="title" required defaultValue={selectedLesson?.title} className="w-full bg-slate-50 p-5 rounded-[28px] font-black outline-none border-4 border-transparent focus:border-indigo-100 focus:bg-white transition-all shadow-sm" /></div>
+                      <div className="group"><label className="text-[10px] font-black text-slate-400 uppercase ml-4 mb-2 block tracking-widest">Дата занятия</label><input name="date" type="date" required defaultValue={selectedLesson?.date} className="w-full bg-slate-50 p-5 rounded-[28px] font-black outline-none border-4 border-transparent focus:border-indigo-100 focus:bg-white transition-all shadow-sm" /></div>
+                      <div className="group"><label className="text-[10px] font-black text-slate-400 uppercase ml-4 mb-2 block tracking-widest">Описание (План урока)</label><textarea name="description" defaultValue={selectedLesson?.description} className="w-full bg-slate-50 p-5 rounded-[28px] font-bold text-sm outline-none border-4 border-transparent focus:border-indigo-100 focus:bg-white transition-all shadow-sm h-32" /></div>
+                      <div className="group"><label className="text-[10px] font-black text-slate-400 uppercase ml-4 mb-2 block tracking-widest">Домашнее задание (Инструкция)</label><textarea name="homework" required defaultValue={selectedLesson?.newHomework} className="w-full bg-slate-50 p-5 rounded-[28px] font-bold text-sm outline-none border-4 border-transparent focus:border-indigo-100 focus:bg-white transition-all shadow-sm h-32" /></div>
+                      
+                      <div className="bg-slate-50 p-8 rounded-[40px] space-y-6 shadow-inner border border-slate-100">
+                         <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Ссылки на занятие</h4>
+                         <input name="videoUrl" placeholder="📽️ Ссылка на Видеоурок" defaultValue={selectedLesson?.videoUrl} className="w-full bg-white p-4 rounded-2xl text-xs font-bold outline-none border border-slate-100 shadow-sm" />
+                         <input name="meetingLink" placeholder="🌐 Google Meet" defaultValue={selectedLesson?.meetingLink} className="w-full bg-white p-4 rounded-2xl text-xs font-bold outline-none border border-slate-100 shadow-sm" />
+                         <input name="zoomLink" placeholder="🎥 Zoom" defaultValue={selectedLesson?.zoomLink} className="w-full bg-white p-4 rounded-2xl text-xs font-bold outline-none border border-slate-100 shadow-sm" />
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Новое ДЗ</label>
-                        <textarea className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl p-4 text-sm font-bold outline-none transition-all h-24" defaultValue={selectedLesson.newHomework} />
+                   </div>
+
+                   {/* Right Column: Tests & Drawings */}
+                   <div className="space-y-8">
+                      {/* Drawing Toggle */}
+                      <div className={`p-8 rounded-[40px] border-4 transition-all ${isDrawingEnabled ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-50 bg-slate-50/30'}`}>
+                         <div className="flex justify-between items-center mb-4">
+                            <div><h3 className="text-xl font-black text-slate-800">Графическое задание</h3><p className="text-[10px] text-slate-400 font-bold mt-1 uppercase">Рисование на платформе</p></div>
+                            <button type="button" onClick={() => setIsDrawingEnabled(!isDrawingEnabled)} className={`w-14 h-8 rounded-full transition-all relative ${isDrawingEnabled ? 'bg-indigo-600' : 'bg-slate-300'}`}><div className={`w-6 h-6 bg-white rounded-full absolute top-1 transition-all ${isDrawingEnabled ? 'right-1' : 'left-1'}`} /></button>
+                         </div>
+                         {isDrawingEnabled && (
+                           <div className="p-4 bg-white rounded-3xl border-2 border-indigo-100 animate-in zoom-in duration-300">
+                              <p className="text-[9px] font-black text-indigo-500 uppercase mb-4 text-center italic">Вы можете загрузить фоновый рисунок для задания ниже</p>
+                              <DrawingTask baseImage={selectedLesson?.drawingBaseImage} onSave={(data) => { if(selectedLesson) selectedLesson.drawingBaseImage = data }} />
+                           </div>
+                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <button className="bg-blue-50 text-blue-700 border-2 border-blue-100 py-4 rounded-2xl text-xs font-black flex flex-col items-center hover:bg-blue-100 transition-all group">
-                          📽️ Видеоурок
-                        </button>
-                        <button className="bg-green-50 text-green-700 border-2 border-green-100 py-4 rounded-2xl text-xs font-black flex flex-col items-center hover:bg-green-100 transition-all group">
-                          🌐 Google Meet
-                        </button>
-                      </div>
-                    </div>
-                  </section>
 
-                  <section className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-slate-100/50">
-                    <h2 className="text-xl font-black mb-6 text-slate-800 flex items-center gap-3">
-                      <span className="p-2 bg-orange-50 text-orange-600 rounded-xl text-lg">📐</span>
-                      Графическое Задание
-                    </h2>
-                    <DrawingTask onSave={(data) => console.log('Drawing', data)} />
-                  </section>
-                </div>
-
-                <div className="space-y-8">
-                  <section className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-slate-100/50">
-                    <h2 className="text-xl font-black mb-6 text-slate-800 flex items-center gap-3">
-                      <span className="p-2 bg-yellow-50 text-yellow-600 rounded-xl text-lg">🧩</span>
-                      Тестирование
-                    </h2>
-                    <div className="space-y-6">
-                      <div className="p-6 bg-slate-50 rounded-3xl border-2 border-slate-100 relative group/test">
-                        <input placeholder="Текст вопроса..." className="w-full bg-white border-2 border-transparent focus:border-indigo-500 rounded-xl p-4 text-sm font-bold mb-4 outline-none shadow-sm" />
-                        
-                        <div className="flex gap-3 mb-4">
-                          <button onClick={() => handleMediaUpload('image')} className="flex-1 py-3 px-4 bg-white border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase text-slate-500 hover:border-indigo-500 hover:text-indigo-600 transition-all">🖼️ Изображение</button>
-                          <button onClick={() => handleMediaUpload('video')} className="flex-1 py-3 px-4 bg-white border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase text-slate-500 hover:border-indigo-500 hover:text-indigo-600 transition-all">🎞️ Видео</button>
-                        </div>
-
-                        {newQuestionMedia && (
-                          <div className="mb-4 rounded-2xl overflow-hidden shadow-inner border-2 border-indigo-100">
-                             {newQuestionMedia.type === 'image' ? <img src={newQuestionMedia.url} className="w-full h-32 object-cover" /> : <video src={newQuestionMedia.url} className="w-full h-32 object-cover" controls />}
-                          </div>
-                        )}
-                      </div>
-                      <button className="w-full bg-slate-800 text-white py-5 rounded-[24px] text-xs font-black uppercase tracking-widest shadow-xl hover:bg-slate-900 transition-all active:scale-95">
-                        Сохранить тест
-                      </button>
-                    </div>
-                  </section>
-
-                  <section className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-xl shadow-slate-100/50">
-                    <h2 className="text-xl font-black mb-6 text-slate-800 flex items-center gap-3">
-                      <span className="p-2 bg-green-50 text-green-600 rounded-xl text-lg">📊</span>
-                      Журнал: {localGroups.find(g => g.id === selectedLesson.groupId)?.name}
-                    </h2>
-                    <div className="space-y-3">
-                      {allStudents.filter(s => localGroups.find(g => g.id === selectedLesson.groupId)?.studentIds.includes(s.id)).map(student => (
-                        <div key={student.id} className="flex items-center justify-between py-4 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 px-4 rounded-2xl transition-all">
-                          <div className="flex items-center gap-3">
-                            <input type="checkbox" className="w-5 h-5 text-indigo-600 rounded-lg border-slate-300 focus:ring-indigo-500" defaultChecked={selectedLesson.attendance.includes(student.id)} />
-                            <div className="flex flex-col">
-                               <span className="text-sm font-black text-slate-700">{student.name}</span>
-                               <button onClick={() => { setSelectedStudent(student); setSelectedGroup(localGroups.find(g => g.id === selectedLesson.groupId)!); setActiveTab('groups'); }} className="text-[10px] text-indigo-500 font-bold uppercase text-left hover:underline">Профиль</button>
+                      {/* Quiz Builder */}
+                      <div className="p-8 rounded-[40px] bg-white border border-slate-100 shadow-xl shadow-slate-100/50 space-y-6">
+                         <div className="flex justify-between items-center">
+                            <h3 className="text-xl font-black text-slate-800">Проверка знаний</h3>
+                            <div className="flex gap-2">
+                               <button type="button" onClick={() => setQuizFile(undefined)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${!quizFile ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>Тест</button>
+                               <label className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase cursor-pointer transition-all ${quizFile ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>Файл<input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if(f) setQuizFile(URL.createObjectURL(f)); }} /></label>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <input 
-                              type="number" 
-                              placeholder="0-100" 
-                              className="w-16 bg-white border-2 border-slate-100 rounded-xl px-2 py-3 text-sm text-center font-black text-indigo-600 focus:border-indigo-500 outline-none shadow-sm"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <button className="w-full mt-8 bg-indigo-600 text-white py-5 rounded-[24px] text-sm font-black shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
-                      Сохранить Журнал
-                    </button>
-                  </section>
-                </div>
-              </div>
-            ) : (
-              <div className="h-[600px] flex flex-col items-center justify-center text-gray-300 border-4 border-dashed border-gray-100 rounded-[64px] bg-white/50">
-                <div className="text-9xl mb-8 opacity-5">📕</div>
-                <h3 className="text-2xl font-black text-slate-300 uppercase tracking-widest">Журнал не открыт</h3>
-              </div>
-            )}
+                         </div>
+
+                         {quizFile ? (
+                           <div className="p-10 bg-indigo-50 rounded-[32px] border-2 border-indigo-100 text-center animate-in zoom-in duration-300">
+                              <span className="text-4xl mb-4 block">📄</span>
+                              <p className="text-xs font-black text-indigo-600 uppercase">Загружен файл задания</p>
+                              <p className="text-[9px] text-slate-400 mt-2">При загруженном файле интерактивный тест будет скрыт.</p>
+                              <button type="button" onClick={() => setQuizFile(undefined)} className="mt-4 text-red-400 font-black uppercase text-[10px]">Удалить файл</button>
+                           </div>
+                         ) : (
+                           <div className="space-y-6">
+                              <div className="max-h-[300px] overflow-y-auto pr-2 space-y-4 scrollbar-hide">
+                                 {editorQuestions.map((q, qIdx) => (
+                                   <div key={q.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4 relative group">
+                                      <button type="button" onClick={() => setEditorQuestions(editorQuestions.filter(item => item.id !== q.id))} className="absolute top-4 right-4 text-red-300 hover:text-red-500 transition-colors">✕</button>
+                                      <input 
+                                        placeholder={`Вопрос ${qIdx + 1}`} 
+                                        value={q.text} 
+                                        onChange={(e) => { const newQ = [...editorQuestions]; newQ[qIdx].text = e.target.value; setEditorQuestions(newQ); }}
+                                        className="w-full bg-white p-3 rounded-xl text-sm font-bold border border-slate-100 shadow-sm" 
+                                      />
+                                      <div className="grid grid-cols-2 gap-3">
+                                         {q.options.map((opt, oIdx) => (
+                                           <div key={oIdx} className="flex items-center gap-2">
+                                              <input type="radio" checked={q.correctIndex === oIdx} onChange={() => { const newQ = [...editorQuestions]; newQ[qIdx].correctIndex = oIdx; setEditorQuestions(newQ); }} />
+                                              <input 
+                                                placeholder={`Вариант ${oIdx + 1}`} 
+                                                value={opt} 
+                                                onChange={(e) => { const newQ = [...editorQuestions]; newQ[qIdx].options[oIdx] = e.target.value; setEditorQuestions(newQ); }}
+                                                className="w-full bg-white p-2 rounded-lg text-[11px] font-bold border border-slate-100" 
+                                              />
+                                           </div>
+                                         ))}
+                                      </div>
+                                      {/* Media URL Field */}
+                                      <div className="pt-2 border-t border-slate-200 mt-2">
+                                        <input 
+                                          placeholder="URL для медиа (фото/видео/аудио)" 
+                                          value={q.mediaUrl || ''} 
+                                          onChange={(e) => { const newQ = [...editorQuestions]; newQ[qIdx].mediaUrl = e.target.value; setEditorQuestions(newQ); }}
+                                          className="w-full bg-white p-2 rounded-lg text-[10px] font-medium border border-slate-100" 
+                                        />
+                                      </div>
+                                   </div>
+                                 ))}
+                                 {editorQuestions.length === 0 && <p className="text-center py-10 text-slate-300 font-bold uppercase text-[10px]">Тест еще не создан</p>}
+                              </div>
+                              <button type="button" onClick={addQuestion} className="w-full py-4 rounded-2xl bg-slate-800 text-white font-black uppercase text-[10px] hover:bg-slate-900 transition-all">+ Добавить вопрос</button>
+                           </div>
+                         )}
+                      </div>
+
+                      <button type="submit" className="w-full bg-indigo-600 text-white py-8 rounded-[40px] font-black uppercase text-sm shadow-2xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-[0.98]">Сохранить все изменения</button>
+                   </div>
+                </form>
+             </div>
           </div>
         )}
+
+        {/* COPY MODAL */}
+        {copyTarget && (
+           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[250] flex items-center justify-center p-6">
+              <div className="bg-white rounded-[56px] w-full max-w-md p-12 shadow-2xl animate-in zoom-in duration-300">
+                 <h3 className="text-2xl font-black text-slate-800 mb-6 text-center">Копировать урок в:</h3>
+                 <div className="space-y-3">
+                    {groups.filter(g => g.id !== copyTarget.groupId).map(g => (
+                      <button key={g.id} onClick={() => copyLessonToGroup(g.id)} className="w-full p-6 bg-slate-50 rounded-[32px] text-left hover:bg-indigo-600 hover:text-white transition-all group">
+                         <p className="font-black text-lg">{g.name}</p><p className="text-[10px] font-black uppercase opacity-60 tracking-widest">{g.grade}</p>
+                      </button>
+                    ))}
+                    {groups.filter(g => g.id !== copyTarget.groupId).length === 0 && <p className="text-center text-slate-300 py-10 font-bold uppercase text-[10px]">Нет других групп для копирования</p>}
+                    <button onClick={() => setCopyTarget(null)} className="w-full mt-4 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-colors">Отмена</button>
+                 </div>
+              </div>
+           </div>
+        )}
+
       </main>
-
-      {showCreateGroup && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[48px] w-full max-w-xl p-10 shadow-2xl animate-in zoom-in duration-300">
-            <div className="flex justify-between items-start mb-8">
-              <div>
-                <h2 className="text-3xl font-black text-slate-800">Новая группа</h2>
-              </div>
-              <button onClick={() => setShowCreateGroup(false)} className="text-slate-300 hover:text-slate-800 text-2xl font-black">✕</button>
-            </div>
-            
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Название</label>
-                  <input placeholder="Напр: 8-Б Физмат" className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl p-4 text-sm font-bold outline-none transition-all" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Класс</label>
-                  <select className="w-full bg-slate-50 border-2 border-transparent focus:border-indigo-500 rounded-2xl p-4 text-sm font-bold outline-none bg-white transition-all">
-                     <option>8-А</option>
-                     <option>9-Б</option>
-                     <option>11-В</option>
-                  </select>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Ученики</label>
-                <div className="max-h-60 overflow-y-auto border-2 border-slate-50 rounded-3xl p-4 space-y-2 bg-slate-50/50">
-                  {allStudents.map(student => (
-                    <label key={student.id} className="flex items-center gap-4 p-3 hover:bg-white hover:shadow-md rounded-2xl cursor-pointer transition-all border-2 border-transparent hover:border-indigo-50">
-                       <input type="checkbox" className="w-5 h-5 text-indigo-600 rounded-lg" />
-                       <img src={student.avatar} className="w-8 h-8 rounded-lg" />
-                       <span className="text-sm font-black text-slate-800">{student.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-4 pt-6">
-                 <button onClick={() => setShowCreateGroup(false)} className="flex-1 py-4 rounded-2xl font-black text-slate-400 hover:bg-slate-50 transition-all">Отмена</button>
-                 <button onClick={() => setShowCreateGroup(false)} className="flex-2 bg-indigo-600 text-white px-10 py-4 rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all">Создать</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
