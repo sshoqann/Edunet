@@ -1,6 +1,6 @@
 {
-  "name": "EduNexus - Smart Learning Platform",
-  "description": "Comprehensive school management with deep admin oversight, interactive student assignments, and parent tracking.",
+  "name": "Copy of EduNexus - Smart Learning Platform",
+  "description": "A comprehensive educational platform for students, teachers, and parents featuring lesson planning, automated testing, drawing assignments, and progress tracking.",
   "requestFramePermissions": [
     "camera",
     "microphone"

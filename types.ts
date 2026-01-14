@@ -2,8 +2,7 @@
 export enum UserRole {
   STUDENT = 'STUDENT',
   TEACHER = 'TEACHER',
-  PARENT = 'PARENT',
-  ADMIN = 'ADMIN'
+  PARENT = 'PARENT'
 }
 
 export enum HomeworkStatus {
@@ -22,14 +21,10 @@ export interface Subject {
 export interface User {
   id: string;
   name: string;
-  role: UserRole | null;
+  role: UserRole;
   avatar: string;
-  contactInfo: string; // Email, Phone or Username
-  password?: string;
-  isApproved: boolean;
-  isAdmin: boolean;
   age?: number;
-  grade?: string;
+  grade?: string; // e.g., "8-A"
   childrenIds?: string[]; 
 }
 
@@ -41,14 +36,12 @@ export interface Group {
   studentIds: string[];
   performanceLevel: 'Высокая' | 'Средняя' | 'Требует внимания';
   averageScore: number;
-  subgroups?: string[]; // IDs of subgroups
 }
 
 export interface LessonPlan {
   id: string;
   subjectId: string;
-  groupId: string;
-  teacherId: string;
+  groupId: string; // Linked to a specific group
   title: string;
   date: string;
   description: string;
@@ -57,22 +50,6 @@ export interface LessonPlan {
   videoUrl?: string;
   meetingLink?: string;
   attendance: string[]; 
-}
-
-export interface SubjectTeacherLink {
-  id: string;
-  subjectId: string;
-  teacherId: string;
-  groupId: string;
-}
-
-export interface SystemLog {
-  id: string;
-  timestamp: string;
-  userId: string;
-  userName: string;
-  action: string;
-  details: string;
 }
 
 export interface Quiz {
