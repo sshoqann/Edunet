@@ -1,4 +1,4 @@
-
+import { supabase } from './lib/supabaseClient'
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './views/Login';
@@ -19,10 +19,21 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleLogin = (loggedUser: User) => {
-    setUser(loggedUser);
-    localStorage.setItem('edu_user', JSON.stringify(loggedUser));
-  };
+const handleLogin = async (loginValue: string, passwordValue: string) => {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('login', loginValue)
+    .eq('password', passwordValue)
+    .single()
+
+  if (data) {
+    setUser(data)
+    localStorage.setItem('edu_user', JSON.stringify(data))
+  } else {
+    alert('Неверный логин или пароль')
+  }
+};
 
   const handleLogout = () => {
     setUser(null);
