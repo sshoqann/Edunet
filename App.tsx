@@ -10,35 +10,49 @@ import { User, UserRole } from './types';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Persistence simulation
+  // Проверка сохраненной сессии при загрузке
   useEffect(() => {
     const savedUser = localStorage.getItem('edu_user');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
     }
+    setLoading(false);
   }, []);
 
-const handleLogin = async (loginValue: string, passwordValue: string) => {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('login', loginValue)
-    .eq('password', passwordValue)
-    .single()
+  // ИСПРАВЛЕННАЯ ФУНКЦИЯ ВХОДА
+  const handleLogin = async (loginValue: string, passwordValue: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('login', loginValue)
+        .eq('password', passwordValue)
+        .single();
 
-  if (data) {
-    setUser(data)
-    localStorage.setItem('edu_user', JSON.stringify(data))
-  } else {
-    alert('Неверный логин или пароль')
-  }
-};
+      if (error) {
+        console.error("Ошибка Supabase:", error.message);
+        alert('Неверный логин или пароль');
+        return;
+      }
+
+      if (data) {
+        setUser(data);
+        localStorage.setItem('edu_user', JSON.stringify(data));
+      }
+    } catch (err) {
+      console.error("Критическая ошибка:", err);
+      alert('Ошибка при подключении к базе данных');
+    }
+  };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('edu_user');
   };
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">Загрузка...</div>;
 
   return (
     <Router>
