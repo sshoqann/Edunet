@@ -1,33 +1,17 @@
-
 import React, { useState } from 'react';
-import { User, UserRole } from '../types';
-import { MOCK_USERS } from '../data';
 
 interface LoginProps {
-  onLogin: (user: User) => void;
+  onLogin: (loginValue: string, passwordValue: string) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    // In a real app, this would be an API call
-    const user = MOCK_USERS.find(u => u.contactInfo === login && u.password === password);
-    
-    if (user) {
-      if (!user.isApproved) {
-        setError('Ваш аккаунт еще не подтвержден администратором.');
-        return;
-      }
-      onLogin(user);
-    } else {
-      setError('Неверный логин или пароль');
-    }
+    // Передаем введенные данные в функцию handleLogin, которую мы написали в App.tsx
+    onLogin(login, password);
   };
 
   return (
@@ -42,19 +26,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-xs font-bold border border-red-100 animate-bounce">
-              ⚠️ {error}
-            </div>
-          )}
-          
           <div>
             <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest ml-1">Логин</label>
             <input
               type="text"
               value={login}
               onChange={(e) => setLogin(e.target.value)}
-              placeholder="admin / teacher1 / student1"
+              placeholder="Введите логин"
               className="w-full px-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700"
               required
             />
@@ -81,10 +59,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </form>
         
         <div className="mt-10 text-center">
-           <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest leading-relaxed">
-             Только администратор может создавать новые учетные записи. 
-             Если вы забыли пароль, обратитесь в ИТ-отдел школы.
-           </p>
+            <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest leading-relaxed">
+               Вход через единую базу данных школы
+            </p>
         </div>
       </div>
     </div>
